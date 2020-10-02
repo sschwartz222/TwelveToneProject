@@ -69,10 +69,15 @@ function loadInstruments(instruments) {
     }
 }
 loadInstruments([hihat, ride, piano, violin, cello, clarinet])
+let instrStrings = ["hihat", "ride", "piano", "violin", "cello", "clarinet"]
 
 //////////////////////////////////////////////////////////////
 
 const timeValues = [1/4, 3/8, 1/2, 3/4, 1, 2, 3, 4]
+const pianoTimeValues = [1, 1, 1, 1/2, 3/4, 1/2, 1/2, 1/2, 1/2, 3/4,
+                        3/4, 3/4, 1/4, 1/2, 3/4, 1, 2]
+const celloTimeValues = [2, 3/2, 2, 2, 1/2, 1/2, 3/2, 1/2, 1/2, 1/2, 
+                        1/2, 3/2, 1/2, 1/2, 2]
 const rests = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1]
 // Initiallizing all rows
 let P_0 = []
@@ -264,7 +269,7 @@ function findHexRows(r, g) {
     for (let i = 0; i < 4; i++) {
         for (let j = 0; j < 12; j++) {
             if (checker(lastHalf, g[i][j].slice(0,6))) {
-                console.log(g[i][j])
+                //console.log(g[i][j])
                 let n = determineRowType(i)
                 let ret = {
                     'r' : g[i][j],
@@ -298,14 +303,20 @@ function shuffle(array) {
     return array;
   }
 
-function playRow( row, instrArray, tempo, numRows, register, range, restTime, hex, timeConstraint ) {
-    
+function playRow( row, instrArray, tempo, numRows, registerArray, range, restTime, timeConstraint ) {
+
     fillRows(row)
     let hexRows = findHexRows(row, grid)
-    let instrIndex = 0
-    let volume = 1
+    let celloRow = []
+    for (let f = 5; f > 0; f--) {
+        shuffle(row)
+        celloRow.push(row[1])
+    }
+    //let hex = false
+    let instrIndex = 2
+    let volume = .7
     let loops = numRows || 1
-    root = 24 + register*12
+    //root = 24 + register*12
     let rangeArray = Array.from(Array(range).keys())
     let pan = 0
     let time = ctx.currentTime
@@ -321,36 +332,92 @@ function playRow( row, instrArray, tempo, numRows, register, range, restTime, he
 
     let timeout
     let curr_time = ctx.currentTime
+    
+    let run = function (selectedPreset, x) {
+        let specTimeCounter = 0
+        let specPitchCounter = 0
+        for (let j = 0; j < loops; j++) {
+            let curr_row
+            if (x === 5) {
+                let newRows = shuffle(hexRows)
+                curr_row = newRows[0]
+                volume = 1
+            }
+            else if (x === 4) {
+                curr_row = {
+                    'r' : celloRow,
+                    'name' : "unique melodic pattern"
+                }
+            }
+            else {
+                curr_row = pickRow(grid)
+            }
+            let curr_row_name = curr_row.name
+            timeout = (function(n, r) {   
+                setTimeout(function() {
+                    console.log(instrStrings[x] + ' playing: ' + n)
+                    console.log(rowToString(r))
+                }, Math.round((time-curr_time)*1000))
+            }) (curr_row_name, curr_row.r)
+            
+            for (let i = 0; i < 12; i++) {
+                let t = timeValues[Math.floor(Math.random() * timeValues.length)]
+                if (x === 2) t = 2*pianoTimeValues[specTimeCounter.mod(17)]
+                if (x === 4) t = 2*celloTimeValues[specTimeCounter.mod(15)]
+                let r = rests[Math.floor(Math.random() * rests.length)]
+                let ran = rangeArray[Math.floor(Math.random() * rangeArray.length)]
+                dur = beat*t
+                let pitch
+                if (x === 4) pitch = root + 12 + celloRow[specPitchCounter.mod(5)]
+                else pitch = root + curr_row.r[i] + ran*12
+                switch (x) {
+                    case 2:
+                        pan = -.2
+                        break;
+                    case 3:
+                        pan = .5
+                        break;
+                    case 4:
+                        pan = -.8
+                        break;
+                    case 5:
+                        pan = .1
+                        break;
+                    default:
+                        pan = 0
+                }
+                
+                sfTone(selectedPreset, pitch, time, dur, volume, pan)
+                let rest = rest_length*beat*r*timeValues[Math.floor(Math.random() * timeValues.length)]
+                if (x === 2 || x === 4) rest = 0
+                time += (dur + rest)
+                specPitchCounter++
+                specTimeCounter++
+            }
+        }
+        time = curr_time
+    }    
     for (let x = 0; x < instr.length; x++) {
-        if (instrArray[x] === true) {
-            let selectedPreset = instr[x]
+        let selectedPreset
+        if (instrArray[x] === 1) { 
+            selectedPreset = instr[x] 
+            root = 24 + registerArray[x]*12
             switch (x) {
                 case 0:
-                    for (let j = 0; j < loops; j++) { 
-
-        }
-    }
-    for (let j = 0; j < loops; j++) {
-        let curr_row = pickRow(grid)
-        let curr_row_name = curr_row.name
-        timeout = (function(n, r) {   
-            setTimeout(function() {
-                console.log('playing: ' + n)
-                console.log(rowToString(r))
-            }, Math.round((time-curr_time)*1000))
-        }) (curr_row_name, curr_row.r)
-        for (let i = 0; i < 12; i++) {
-            let t = timeValues[Math.floor(Math.random() * timeValues.length)]
-            let r = rests[Math.floor(Math.random() * rests.length)]
-            let ran = rangeArray[Math.floor(Math.random() * rangeArray.length)]
-            dur = beat*t
-            let pitch
-            if (instrIndex === 0) pitch = 44
-            else pitch = root + curr_row.r[i] + ran*12
-            sfTone(selectedPreset, pitch, time, dur, volume, pan)
-            let rest = rest_length*beat*r*timeValues[Math.floor(Math.random() * timeValues.length)]
-            time += (dur + rest)
-
+                    for (let y = 0; y < loops*2; y++) { 
+                        for (let z = 0; z < 12; z++) {
+                            sfTone(selectedPreset, 44, time, beat, .2, pan)
+                            time += beat
+                        }
+                    }
+                    time = curr_time
+                    break;
+                case 1:
+                    //functionality not yet programmed
+                default:
+                    run(selectedPreset, x)
+                    break;
+                }
         }
     }
 }
